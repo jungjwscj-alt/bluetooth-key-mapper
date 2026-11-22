@@ -92,7 +92,7 @@ public final class MainActivity extends Activity {
     ScrollView scroll=new ScrollView(this);
     root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,18,20,24);
     root.setBackgroundColor(Color.rgb(245,248,255));scroll.addView(root);setContentView(scroll);
-    TextView title=label("블루투스 키 맵퍼  v1.1");title.setTextSize(26);title.setTextColor(Color.rgb(35,78,205));
+    TextView title=label("블루투스 키 맵퍼  v1.2");title.setTextSize(26);title.setTextColor(Color.rgb(35,78,205));
     label("연결된 Bluetooth HID 입력장치를 Android에서 먼저 페어링한 뒤 선택하세요.");
     status=label("");
     button("① 연결된 입력장치 선택",this::chooseDevice);
@@ -104,7 +104,7 @@ public final class MainActivity extends Activity {
     sw.setChecked(mappingOn(this));sw.setTextSize(17);
     sw.setOnCheckedChangeListener((v,checked)->prefs(this).edit().putBoolean("enabled",checked).apply());
     root.addView(sw);
-    button("③ 접근성 서비스 활성화",()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+    if(!"lite".equals(BuildConfig.FLAVOR))button("③ 접근성 서비스 활성화",()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
     button("④ 입력기 활성화",()->startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));
     button("⑤ 기본 입력기 선택",()->{
       InputMethodManager im=(InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
@@ -115,7 +115,7 @@ public final class MainActivity extends Activity {
     label("테스트 입력란 (IME 키 출력 확인)");
     EditText test=new EditText(this);test.setHint("이곳을 눌러 방향키, Enter, Space 테스트");
     root.addView(test);
-    label("제약: 방향키와 Enter 등은 현재 연결된 입력 대상에만 전달됩니다. 앱 전체에 실제 하드웨어 키를 주입하지 않습니다. 스크롤/뒤로는 접근성 제스처를 사용합니다.");
+    label("lite".equals(BuildConfig.FLAVOR) ? "Lite: 접근성 서비스가 없습니다. IME를 켜고 현재 편집 중인 입력란에서만 매핑을 시도할 수 있습니다. 다른 앱의 스크롤, 뒤로가기와 전역 매핑은 지원하지 않습니다. IME 지원 여부는 앱마다 다릅니다." : "방향키/Enter 등은 현재 연결된 입력 대상에만 전달합니다. 스크롤/뒤로는 접근성 제스처로 실행하며 앱별로 제한될 수 있습니다.");
     update();
   }
   private void chooseDevice(){
@@ -137,9 +137,12 @@ public final class MainActivity extends Activity {
     }).show();
   }
   private void showTargetPicker(String source){
+    boolean lite="lite".equals(BuildConfig.FLAVOR);
+    final int[] targets=lite?java.util.Arrays.copyOf(TARGETS,18):TARGETS;
+    final String[] names=lite?java.util.Arrays.copyOf(NAMES,18):NAMES;
     new AlertDialog.Builder(this).setTitle("입력 "+source+" → 출력 기능")
-      .setItems(NAMES,(dialog,choice)->{
-        prefs(this).edit().putInt("map."+source,TARGETS[choice]).apply();update();
+      .setItems(names,(dialog,choice)->{
+        prefs(this).edit().putInt("map."+source,targets[choice]).apply();update();
       }).setNegativeButton("취소",null).show();
   }
   private void update(){
