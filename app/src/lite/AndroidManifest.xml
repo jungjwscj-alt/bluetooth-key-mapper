@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+  <application>
+    <!-- Lite build does NOT register an AccessibilityService. -->
+    <service android:name="com.bluekeymapper.app.KeyFilterService" tools:node="remove"/>
+  </application>
+</manifest>
