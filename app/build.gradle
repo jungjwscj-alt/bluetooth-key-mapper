@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+android {
+ namespace 'com.bluekeymapper.app'
+ compileSdk 35
+ defaultConfig {
+  applicationId 'com.bluekeymapper.app'
+  minSdk 27
+  targetSdk 35
+  versionCode 2
+  versionName '1.1.0'
+ }
+ compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
