@@ -14,6 +14,8 @@ import java.util.Map;
 public final class KeyFilterService extends AccessibilityService {
   private final Map<String,Integer> active=new HashMap<>();
   private String learningHeld;
+  private long lastWheelAt;
+  private boolean gestureBusy;
   @Override protected void onServiceConnected(){
     super.onServiceConnected();
     AccessibilityServiceInfo info=getServiceInfo();
@@ -41,14 +43,25 @@ public final class KeyFilterService extends AccessibilityService {
     if(active.containsKey(id)){
       Integer old=active.get(id);
       if(old>0)MapperImeService.send(old,e);
+      else if(MouseMapping.isWheel(old)&&e.getRepeatCount()>0 &&
+        android.os.SystemClock.uptimeMillis()-lastWheelAt>=320){
+        if(systemAction(old,e))lastWheelAt=android.os.SystemClock.uptimeMillis();
+      }
       return true;
     }
-    boolean accepted=target<0?systemAction(target):MapperImeService.send(target,e);
+    boolean accepted=target<0?systemAction(target,e):MapperImeService.send(target,e);
+    if(accepted&&MouseMapping.isWheel(target))lastWheelAt=android.os.SystemClock.uptimeMillis();
     if(accepted){active.put(id,target);return true;}
     return false;
   }
-  private boolean systemAction(int target){
+  private boolean systemAction(int target,KeyEvent original){
+    if(target==MouseMapping.BUTTON_FORWARD){
+      // Not an actual global mouse-forward injection.
+      return MapperImeService.send(KeyEvent.KEYCODE_FORWARD,original);
+    }
+    target=MouseMapping.fallback(target);
     if(target==MainActivity.BACK)return performGlobalAction(GLOBAL_ACTION_BACK);
+    if(gestureBusy)return false;
     DisplayMetrics dm=getResources().getDisplayMetrics();
     float w=dm.widthPixels,h=dm.heightPixels;
     if(w<=0||h<=0)return false;
@@ -63,11 +76,17 @@ public final class KeyFilterService extends AccessibilityService {
     Path path=new Path();path.moveTo(x,y);path.lineTo(x2,y2);
     GestureDescription gesture=new GestureDescription.Builder()
       .addStroke(new GestureDescription.StrokeDescription(path,0,260)).build();
-    return dispatchGesture(gesture,null,null);
+    gestureBusy=true;
+    boolean started=dispatchGesture(gesture,new GestureResultCallback(){
+      @Override public void onCompleted(GestureDescription g){gestureBusy=false;}
+      @Override public void onCancelled(GestureDescription g){gestureBusy=false;}
+    },null);
+    if(!started)gestureBusy=false;
+    return started;
   }
   private void cleanup(){
     for(Integer mapped:active.values())if(mapped>0)MapperImeService.release(mapped);
-    active.clear();learningHeld=null;
+    active.clear();learningHeld=null;gestureBusy=false;lastWheelAt=0;
   }
   @Override public void onAccessibilityEvent(AccessibilityEvent e){}
   @Override public void onInterrupt(){cleanup();}
