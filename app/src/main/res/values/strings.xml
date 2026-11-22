@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+ <string name="app_name">블루투스 키 맵퍼</string>
+ <string name="accessibility_name">블루투스 키 맵퍼 입력 감지</string>
+ <string name="accessibility_description">선택한 블루투스 HID 키를 읽고 설정된 키 또는 스크롤 동작으로 매핑합니다. 다른 기기의 입력을 기록하지 않습니다.</string>
+ <string name="ime_name">블루투스 키 맵퍼 입력기</string>
+</resources>
