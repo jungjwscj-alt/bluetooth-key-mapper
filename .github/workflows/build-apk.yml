@@ -25,13 +25,28 @@ jobs:
           gradle-version: '8.11.1'
       - name: Build test APK
         run: gradle --no-daemon --stacktrace :app:assembleFullDebug :app:assembleLiteDebug
+      - name: Validate APK permissions and signatures
+        run: |
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          FULL=app/build/outputs/apk/full/debug/app-full-debug.apk
+          LITE=app/build/outputs/apk/lite/debug/app-lite-debug.apk
+          "$AAPT" dump xmltree "$FULL" AndroidManifest.xml > full-manifest.txt
+          "$AAPT" dump xmltree "$LITE" AndroidManifest.xml > lite-manifest.txt
+          grep -q 'android.permission.BIND_ACCESSIBILITY_SERVICE' full-manifest.txt
+          if grep -q 'android.permission.BIND_ACCESSIBILITY_SERVICE' lite-manifest.txt; then
+            echo "Lite unexpectedly declares accessibility service" >&2
+            exit 1
+          fi
+          "$SIGNER" verify --verbose "$FULL"
+          "$SIGNER" verify --verbose "$LITE"
       - name: Calculate SHA-256
         run: |
           sha256sum app/build/outputs/apk/full/debug/app-full-debug.apk > app/build/outputs/apk/full/debug/app-full-debug.apk.sha256
           sha256sum app/build/outputs/apk/lite/debug/app-lite-debug.apk > app/build/outputs/apk/lite/debug/app-lite-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: Bluetooth-Key-Mapper-v1.2-Full-and-Lite
+          name: Bluetooth-Key-Mapper-v1.3-Full-and-Lite
           path: |
             app/build/outputs/apk/full/debug/app-full-debug.apk
             app/build/outputs/apk/full/debug/app-full-debug.apk.sha256
