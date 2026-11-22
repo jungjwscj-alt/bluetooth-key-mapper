@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.graphics.Color;
@@ -26,16 +27,23 @@ import java.util.ArrayList;
 
 public final class MainActivity extends Activity {
   static final int SCROLL_UP=-101, SCROLL_DOWN=-102, SCROLL_LEFT=-103, SCROLL_RIGHT=-104, BACK=-105;
+  private TextView mouseStatus;
+  private View mouseView;
+  private int nextWheel;
   static final int[] TARGETS={
     KeyEvent.KEYCODE_DPAD_UP,KeyEvent.KEYCODE_DPAD_DOWN,KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT,
     KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_SPACE,KeyEvent.KEYCODE_ESCAPE,KeyEvent.KEYCODE_TAB,
     KeyEvent.KEYCODE_DEL,KeyEvent.KEYCODE_FORWARD_DEL,KeyEvent.KEYCODE_PAGE_UP,KeyEvent.KEYCODE_PAGE_DOWN,
     KeyEvent.KEYCODE_MOVE_HOME,KeyEvent.KEYCODE_MOVE_END,KeyEvent.KEYCODE_F1,KeyEvent.KEYCODE_F2,
-    KeyEvent.KEYCODE_F3,KeyEvent.KEYCODE_F4,SCROLL_UP,SCROLL_DOWN,SCROLL_LEFT,SCROLL_RIGHT,BACK,KeyEvent.KEYCODE_FORWARD
+    KeyEvent.KEYCODE_F3,KeyEvent.KEYCODE_F4,SCROLL_UP,SCROLL_DOWN,SCROLL_LEFT,SCROLL_RIGHT,BACK,KeyEvent.KEYCODE_FORWARD,
+    MouseMapping.WHEEL_UP,MouseMapping.WHEEL_DOWN,MouseMapping.WHEEL_LEFT,MouseMapping.WHEEL_RIGHT,
+    MouseMapping.BUTTON_BACK,MouseMapping.BUTTON_FORWARD
   };
   static final String[] NAMES={"↑ 방향키","↓ 방향키","← 방향키","→ 방향키","Enter","Space","Esc","Tab",
     "Backspace","Delete","Page Up","Page Down","Home(커서)","End(커서)","F1","F2","F3","F4",
-    "스크롤 위","스크롤 아래","스크롤 왼쪽","스크롤 오른쪽","Android 뒤로가기","앞으로가기(지원 앱 한정)"};
+    "스크롤 위","스크롤 아래","스크롤 왼쪽","스크롤 오른쪽","Android 뒤로가기","앞으로가기(지원 앱 한정)",
+    "마우스 휠 위","마우스 휠 아래","마우스 휠 왼쪽","마우스 휠 오른쪽",
+    "마우스 측면 뒤로","마우스 측면 앞으로"};
   private LinearLayout root, rows;
   private TextView status;
   private final Handler handler=new Handler(Looper.getMainLooper());
@@ -77,7 +85,12 @@ public final class MainActivity extends Activity {
   @Override protected void onResume(){super.onResume();active=true;update();handler.post(refresh);}
   @Override protected void onPause(){active=false;handler.removeCallbacks(refresh);super.onPause();}
   @Override public boolean dispatchKeyEvent(KeyEvent e){
-    if(learn(this,e)){return true;}
+    if(learn(this,e))return true;
+    Integer target=lookup(this,e);
+    if(target!=null && MouseMapping.isMouse(target)){
+      if(e.getAction()==KeyEvent.ACTION_DOWN && e.getRepeatCount()==0)showMouseTest(target);
+      return true;
+    }
     return super.dispatchKeyEvent(e);
   }
   private Button button(String text,Runnable task){
@@ -92,7 +105,7 @@ public final class MainActivity extends Activity {
     ScrollView scroll=new ScrollView(this);
     root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,18,20,24);
     root.setBackgroundColor(Color.rgb(245,248,255));scroll.addView(root);setContentView(scroll);
-    TextView title=label("블루투스 키 맵퍼  v1.2");title.setTextSize(26);title.setTextColor(Color.rgb(35,78,205));
+    TextView title=label("블루투스 키 맵퍼  v1.3");title.setTextSize(26);title.setTextColor(Color.rgb(35,78,205));
     label("연결된 Bluetooth HID 입력장치를 Android에서 먼저 페어링한 뒤 선택하세요.");
     status=label("");
     button("① 연결된 입력장치 선택",this::chooseDevice);
@@ -109,6 +122,23 @@ public final class MainActivity extends Activity {
     button("⑤ 기본 입력기 선택",()->{
       InputMethodManager im=(InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
       if(im!=null)im.showInputMethodPicker();
+    });
+    label("마우스 매핑 실험 — 이 앱 안에서만 진짜 휠 이벤트 생성");
+    mouseStatus=label("외부 앱의 마우스 이벤트 주입은 지원되지 않습니다.");
+    mouseView=new View(this){
+      @Override public boolean onGenericMotionEvent(MotionEvent e){
+        if(e.getActionMasked()==MotionEvent.ACTION_SCROLL){
+          mouseStatus.setText("마우스 휠 감지: 세로 "+e.getAxisValue(MotionEvent.AXIS_VSCROLL)+
+            " / 가로 "+e.getAxisValue(MotionEvent.AXIS_HSCROLL)+" (앱 내부)");
+          return true;
+        }
+        return super.onGenericMotionEvent(e);
+      }
+    };
+    root.addView(mouseView,new LinearLayout.LayoutParams(1,1));
+    button("마우스 휠 이벤트 자체 테스트",()->{
+      int[] a={MouseMapping.WHEEL_UP,MouseMapping.WHEEL_DOWN,MouseMapping.WHEEL_LEFT,MouseMapping.WHEEL_RIGHT};
+      showMouseTest(a[(nextWheel++)%a.length]);
     });
     label("매핑 목록");
     rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);root.addView(rows);
@@ -138,8 +168,15 @@ public final class MainActivity extends Activity {
   }
   private void showTargetPicker(String source){
     boolean lite="lite".equals(BuildConfig.FLAVOR);
-    final int[] targets=lite?java.util.Arrays.copyOf(TARGETS,18):TARGETS;
-    final String[] names=lite?java.util.Arrays.copyOf(NAMES,18):NAMES;
+    final int[] targets;
+    final String[] names;
+    if(lite){
+      targets=new int[24];names=new String[24];
+      System.arraycopy(TARGETS,0,targets,0,18);
+      System.arraycopy(NAMES,0,names,0,18);
+      System.arraycopy(TARGETS,24,targets,18,6);
+      for(int i=0;i<6;i++)names[18+i]=NAMES[24+i]+" (앱 내부 시험)";
+    }else{targets=TARGETS;names=NAMES;}
     new AlertDialog.Builder(this).setTitle("입력 "+source+" → 출력 기능")
       .setItems(names,(dialog,choice)->{
         prefs(this).edit().putInt("map."+source,targets[choice]).apply();update();
@@ -168,6 +205,17 @@ public final class MainActivity extends Activity {
       rows.addView(b);count++;
     }
     if(count==0){TextView t=new TextView(this);t.setText("등록된 키가 없습니다.");rows.addView(t);}
+  }
+  private void showMouseTest(int action){
+    if(mouseStatus==null)return;
+    if(MouseMapping.isWheel(action)&&mouseView!=null){
+      MotionEvent ev=MouseMapping.wheelEvent(action);
+      if(ev!=null){try{mouseView.dispatchGenericMotionEvent(ev);}finally{ev.recycle();}}
+    }else{
+      mouseStatus.setText(action==MouseMapping.BUTTON_BACK ?
+        "마우스 뒤로: 앱 내부 감지됨. 외부 앱에서는 접근성 Android 뒤로로 대체" :
+        "마우스 앞으로: 앱 내부 감지됨. 외부 앱에서는 IME KEYCODE_FORWARD만 제한적으로 시도");
+    }
   }
   private void toast(String s){android.widget.Toast.makeText(this,s,android.widget.Toast.LENGTH_SHORT).show();}
 }
