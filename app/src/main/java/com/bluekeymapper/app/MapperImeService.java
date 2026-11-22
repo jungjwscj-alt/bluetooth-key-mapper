@@ -45,6 +45,27 @@ public final class MapperImeService extends InputMethodService {
     if(c==null)return;
     try{c.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP,code));}catch(RuntimeException ignored){}
   }
+  // Limited editor-only remapping for Lite. The regular APK instead relies on its
+  // AccessibilityService for key capture. These callbacks are not guaranteed for
+  // every hardware keyboard, manufacturer or editor.
+  @Override public boolean onKeyDown(int keyCode, KeyEvent event){
+    if("lite".equals(BuildConfig.FLAVOR)){
+      Integer mapped=MainActivity.lookup(this,event);
+      if(mapped!=null&&mapped>0&&getCurrentInputConnection()!=null){
+        if(send(mapped,event))return true;
+      }
+    }
+    return super.onKeyDown(keyCode,event);
+  }
+  @Override public boolean onKeyUp(int keyCode, KeyEvent event){
+    if("lite".equals(BuildConfig.FLAVOR)){
+      Integer mapped=MainActivity.lookup(this,event);
+      if(mapped!=null&&mapped>0&&getCurrentInputConnection()!=null){
+        if(send(mapped,event))return true;
+      }
+    }
+    return super.onKeyUp(keyCode,event);
+  }
   @Override public View onCreateInputView(){
     LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
     root.setBackgroundColor(Color.rgb(228,234,250));root.setPadding(3,6,3,6);
